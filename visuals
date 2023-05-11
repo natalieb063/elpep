@@ -1,0 +1,156 @@
+#loading packages
+library(tidyverse)
+library(tigris)
+library(tidycensus)
+library(gt)
+
+#reading in data
+orange_county <- read_csv("/Users/nataliebrown/Desktop/cdss_data/nowcast_out_OC_CALWORKS.csv")
+kern_county <- read_csv("/Users/nataliebrown/Desktop/cdss_data/nowcast_out_KERN_CALWORKS.csv")
+alameda_county <- read_csv("/Users/nataliebrown/Desktop/cdss_data/nowcast_out_ALAMEDA_CALWORKS.csv")
+
+#selecting variables and data cleaning
+orange_county_0_80 <- orange_county %>%
+  select(GEOID, age_0to5_count, age_6to12_count, COUNTYFIP, share_0_80,
+         share_80_100) %>%
+  mutate(GEOID = as.character(GEOID),
+         COUNTYFIP = as.character(COUNTYFIP)) %>%
+  mutate(GEOID = str_remove(GEOID, "^0+"))
+
+kern_county_0_80 <- kern_county %>%
+  select(GEOID, age_0to5_count, age_6to12_count, COUNTYFIP, share_0_80,
+         share_80_100) %>%
+  mutate(GEOID = as.character(GEOID),
+         COUNTYFIP = as.character(COUNTYFIP)) %>%
+  mutate(GEOID = str_remove(GEOID, "^0+"))
+
+alameda_county_0_80 <- alameda_county %>%
+  select(GEOID, age_0to5_count, age_6to12_count, COUNTYFIP, share_0_80,
+         share_80_100) %>%
+  mutate(GEOID = as.character(GEOID),
+         COUNTYFIP = as.character(COUNTYFIP)) %>%
+  mutate(GEOID = str_remove(GEOID, "^0+"))
+
+#bringing in geometries
+orange_geo <- tracts("CA", "Orange", cb = TRUE)
+orange_geo <- orange_geo %>% select(GEOID, geometry) 
+
+kern_geo <- tracts("CA", "Kern", cb = TRUE)
+kern_geo <- kern_geo %>% select(GEOID, geometry)
+
+alameda_geo <- tracts("CA", "Alameda", cb = TRUE)
+alameda_geo <- alameda_geo %>% select(GEOID, geometry)
+
+#removing leading zeroes
+orange_geo$GEOID <- str_remove(orange_geo$GEOID, "^0+")
+kern_geo$GEOID <- str_remove(kern_geo$GEOID, "^0+")
+alameda_geo$GEOID <- str_remove(alameda_geo$GEOID, "^0+")
+
+#counting number of distinct GEOIDs, all are different numbers (?)
+n_distinct(orange_county_0_80$GEOID)
+n_distinct(orange_geo$GEOID)
+
+n_distinct(kern_county_0_80$GEOID)
+n_distinct(kern_geo$GEOID)
+
+n_distinct(alameda_county_0_80$GEOID)
+n_distinct(alameda_geo$GEOID)
+
+#joining geometries to data
+
+orange_data <- orange_county_0_80 %>%
+  left_join(orange_geo, by = "GEOID") %>%
+  mutate(share_0_80 = share_0_80*100,
+         share_80_100 = share_80_100*100,
+         share_0_80_new = round(share_0_80))
+
+kern_data <- left_join(kern_county_0_80, kern_geo, by = "GEOID")
+
+alameda_data <- left_join(alameda_county_0_80, alameda_geo, by = "GEOID")
+
+#creating maps
+
+#first one does not seem to want to work
+ggplot(data = orange_data, aes(fill = share_0_80_new, geometry = geometry)) + 
+  geom_sf() +
+  scale_fill_distiller(palette = "RdPu", direction = 1) +
+  labs(title = "Children Age 0-12 between 0-80% FPL, 2023",
+       caption = "Data source: Census Data",
+       fill = "ELPEP estimate") +
+  theme(legend.position= "bottom")
+
+#but these ones do
+ggplot(data = orange_data, aes(fill = age_0to5_count, geometry = geometry)) + 
+  geom_sf() +
+  scale_fill_distiller(palette = "RdPu", direction = 1) +
+  labs(title = "  Children Age 0-5 between 0-80% FPL, 2023",
+       caption = "Data source: Census Data",
+       fill = "ELPEP estimate") 
+
+ggplot(data = kern_data, aes(fill = age_0to5_count, geometry = geometry)) + 
+  geom_sf() +
+  scale_fill_distiller(palette = "RdPu", direction = 1) +
+  labs(title = "  Children Age 0-5 between 0-80% FPL, 2023",
+       caption = "Data source: Census Data",
+       fill = "ELPEP estimate") 
+
+ggplot(data = alameda_data, aes(fill = age_0to5_count, geometry = geometry)) + 
+  geom_sf() +
+  scale_fill_distiller(palette = "RdPu", direction = 1) +
+  labs(title = "  Children Age 0-5 between 0-80% FPL, 2023",
+       caption = "Data source: Census Data",
+       fill = "ELPEP estimate") 
+
+#these share maps also do not work
+
+kern_0_80_map <- ggplot(data = kern_data, aes(fill = share_0_80, geometry = geometry)) + 
+  geom_sf() +
+  scale_fill_distiller(palette = "Reds", direction = 1) +
+  labs(title = "Children Age 0-12 between 0-80% FPL, 2023",
+       caption = "Data source: Census",
+       fill = "ELPEP estimate") +
+  theme(legend.position= "bottom")
+
+kern_0_80_map
+
+alameda_0_80_map <- ggplot(data = alameda_data, aes(fill = share_0_80, geometry = geometry)) + 
+  geom_sf() +
+  scale_fill_distiller(palette = "Reds", direction = 1) +
+  labs(title = "  Children Age 0-12 between 0-80% FPL, 2023",
+       caption = "Data source: Census",
+       fill = "ELPEP estimate") +
+  theme(legend.position= "bottom")
+
+alameda_0_80_map
+
+#creating a 5-row table
+sample_table <- orange_county_0_80 %>%
+  rename('0 to 5' = age_0to5_count,
+         '6 to 12' = age_6to12_count,
+         '0% to 80%' = share_0_80,
+         '80% to 100%' = share_80_100) %>%
+  head(5)
+
+#making the data excerpt table for presentation 
+sample_table %>%
+  select(-COUNTYFIP) %>%
+  gt() %>%
+  tab_header(title = "Orange County Count and Share Estimates",
+             subtitle = "Ages 0-12, 0-100% FPL") %>%
+  tab_source_note(source_note = "Source: Census Data") %>%
+  tab_stubhead(label = "GEOID") %>%
+  fmt_number(columns = '6 to 12',
+             decimals = 0) %>%
+  fmt_percent(columns = c('0% to 80%', '80% to 100%'),
+             decimals = 1) %>%
+  tab_spanner(label = "Counts",
+              columns = c('0 to 5', '6 to 12')) %>%
+  tab_spanner(label = "Shares",
+              columns = c('0% to 80%', '80% to 100%'))
+  
+  
+
+
+
+
+
